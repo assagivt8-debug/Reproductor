@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reproductor de jengibre · Spotify</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#fff1dc;--brown:#7a3a12;--p:0}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:'Fraunces',Georgia,serif}
+.stage{position:absolute;left:0;top:0;width:900px;height:300px;transform-origin:0 0;transition:opacity .6s}
+body.hide-idle.idle .stage{opacity:0}
+body.setup .stage{display:none}
+.stage>svg{position:absolute;inset:0;overflow:visible}
+.abs{position:absolute}
+
+/* portada */
+#art{left:282px;top:82px;width:138px;height:138px;border:9px solid #fff3e4;border-radius:22px 18px 24px 20px/20px 24px 18px 22px;
+ background:#4b2312;box-shadow:0 3px 0 #b98b5d,0 6px 8px rgba(60,25,5,.45),inset 0 0 0 2px #e8cfae;overflow:hidden;display:grid;place-items:center}
+#art svg{width:62%;opacity:.55}
+#cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+
+/* texto */
+#info{left:440px;top:74px;width:310px}
+.clip{overflow:hidden;white-space:nowrap}
+.clip span{display:inline-block}
+#title{font-size:38px;line-height:48px;font-weight:600;color:var(--cream);
+ text-shadow:0 2px 0 var(--brown),1px 0 0 var(--brown),-1px 0 0 var(--brown),0 -1px 0 var(--brown),0 5px 8px rgba(60,25,5,.5)}
+#artist{font-size:23px;line-height:30px;font-style:italic;color:#ffe6c4;text-shadow:0 1px 0 var(--brown),0 3px 5px rgba(60,25,5,.45)}
+.mq{animation:mq 8s ease-in-out 1.5s infinite alternate}
+@keyframes mq{to{transform:translateX(var(--d))}}
+
+/* progreso */
+#bar{left:440px;top:160px;width:306px;height:13px;border-radius:7px;background:#ffe9cd;
+ box-shadow:0 2px 0 #b98b5d,inset 0 2px 3px rgba(122,58,18,.35)}
+#fill{position:absolute;left:2px;top:2px;bottom:2px;width:calc((100% - 4px)*var(--p));border-radius:5px;background:linear-gradient(#ffd877,#f0b546)}
+#knob{position:absolute;left:calc(100%*var(--p));top:50%;width:34px;height:34px;transform:translate(-50%,-52%);filter:drop-shadow(0 2px 1px rgba(90,40,8,.55))}
+
+/* controles */
+#ctrl{left:440px;top:176px;width:306px;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 4px}
+#ctrl svg{filter:drop-shadow(0 1.5px 0 var(--brown))}
+.ic{width:30px;height:30px;fill:none;stroke:#fbe6c8;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ic .f{fill:#fbe6c8;stroke-width:1.6}
+#pp{width:62px;height:62px}
+.pause{display:none}
+body.playing .pause{display:block}
+body.playing .play{display:none}
+
+/* animación: solo cuando suena música */
+.man{transform-box:fill-box;transform-origin:50% 95%}
+body.playing .man{animation:sway 1.1s ease-in-out infinite alternate}
+@keyframes sway{from{transform:rotate(-2deg)}to{transform:rotate(2deg) translateY(-2px)}}
+.tw{transform-box:fill-box;transform-origin:center;animation:tw 2.8s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.3;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.tw,body.playing .man,.mq{animation:none}}
+
+/* configuración inicial */
+#setup{display:none;position:fixed;inset:0;overflow:auto;background:#2b1408;color:#ffe9cf;font:16px/1.55 system-ui,sans-serif;padding:28px}
+body.setup #setup{display:block}
+#setup .box{max-width:640px;margin:auto}
+#setup h1{font:600 28px 'Fraunces',Georgia,serif;margin:0 0 8px}
+#setup ol{padding-left:20px}
+#setup code,#setup textarea,#setup input{font:14px ui-monospace,Consolas,monospace}
+#setup code{background:#4b2312;padding:2px 6px;border-radius:4px;word-break:break-all}
+#setup input,#setup textarea{width:100%;padding:10px;border-radius:8px;border:2px solid #b98b5d;background:#fff6e8;color:#3b1a0c}
+#setup button{margin-top:10px;padding:10px 18px;border:0;border-radius:999px;background:#d52b2b;color:#fff;font:600 16px system-ui;cursor:pointer}
+#setup .warn{background:#6b2a12;border-radius:8px;padding:10px 14px;margin:12px 0}
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+<svg viewBox="0 0 900 300" width="900" height="300">
+ <defs>
+  <linearGradient id="ck" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d28a3c"/><stop offset="1" stop-color="#a65522"/></linearGradient>
+  <linearGradient id="mg" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="270"><stop offset="0" stop-color="#e5a553"/><stop offset="1" stop-color="#c47a2d"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a0"/><stop offset="1" stop-color="#f1bb45"/></linearGradient>
+  <radialGradient id="berry" cx=".35" cy=".3"><stop offset="0" stop-color="#ff6a5c"/><stop offset="1" stop-color="#b81818"/></radialGradient>
+  <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 .38  0 0 0 0 .18  0 0 0 0 .05  0 0 0 1.1 -.35"/></filter>
+  <filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dy="4" stdDeviation="3" flood-color="#4a1f06" flood-opacity=".45"/></filter>
+  <clipPath id="bc"><path data-body/></clipPath>
+  <path id="sp" d="M0,-11Q1.2,-1.2 11,0Q1.2,1.2 0,11Q-1.2,1.2 -11,0Q-1.2,-1.2 0,-11Z" fill="#ffd96a"/>
+  <polygon id="star" points="0,-32 8.2,-11.3 30.4,-9.9 13.3,4.3 18.8,25.9 0,14 -18.8,25.9 -13.3,4.3 -30.4,-9.9 -8.2,-11.3" stroke-linejoin="round" stroke-width="7" stroke="#f1bb45" fill="url(#gold)"/>
+  <g id="gs"><circle cx="98" cy="102" r="50"/><rect x="52" y="140" width="96" height="104" rx="38"/>
+   <ellipse cx="40" cy="188" rx="36" ry="19" transform="rotate(-38 40 188)"/><ellipse cx="168" cy="142" rx="34" ry="18" transform="rotate(-62 168 142)"/>
+   <ellipse cx="72" cy="244" rx="30" ry="22" transform="rotate(35 72 244)"/><ellipse cx="128" cy="244" rx="30" ry="22" transform="rotate(-35 128 244)"/></g>
+ </defs>
+
+ <!-- galleta -->
+ <g filter="url(#sh)"><path data-body fill="url(#ck)" stroke="#7a3a12" stroke-width="4" stroke-linejoin="round"/></g>
+ <rect width="900" height="300" filter="url(#grain)" opacity=".4" clip-path="url(#bc)"/>
+ <!-- glaseado ondulado -->
+ <path id="iceT" fill="none" stroke="#d9b79a" stroke-width="9" stroke-linecap="round" transform="translate(0,2)"/>
+ <path id="iceT2" fill="none" stroke="#fff4e6" stroke-width="8" stroke-linecap="round"/>
+ <path id="iceB" fill="none" stroke="#d9b79a" stroke-width="9" stroke-linecap="round" transform="translate(0,2)"/>
+ <path id="iceB2" fill="none" stroke="#fff4e6" stroke-width="8" stroke-linecap="round"/>
+ <g>
+  <circle cx="318" cy="68" r="4" fill="#d52b2b"/><circle cx="400" cy="64" r="4" fill="#8bb27a"/><circle cx="590" cy="74" r="4" fill="#f0b546"/>
+  <circle cx="700" cy="70" r="4" fill="#d52b2b"/><circle cx="480" cy="238" r="4" fill="#8bb27a"/><circle cx="560" cy="236" r="4" fill="#f0b546"/>
+  <circle cx="330" cy="236" r="4" fill="#d52b2b"/><circle cx="650" cy="238" r="4" fill="#8bb27a"/>
+ </g>
+ <!-- destellos -->
+ <g><g transform="translate(646,92)"><use href="#sp" class="tw" style="animation-delay:0s" transform="scale(1.5)"/></g>
+  <g transform="translate(700,112)"><use href="#sp" class="tw" style="animation-delay:.9s" transform="scale(1.1)"/></g>
+  <g transform="translate(722,78)"><use href="#sp" class="tw" style="animation-delay:1.6s" transform="scale(.8)"/></g>
+  <g transform="translate(268,172)"><use href="#sp" class="tw" style="animation-delay:.5s" transform="scale(.8)"/></g>
+  <g transform="translate(222,60)"><use href="#sp" class="tw" style="animation-delay:1.2s" transform="scale(.9)"/></g></g>
+
+ <!-- bastón de caramelo -->
+ <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#sh)">
+  <path id="cane" d="M754,106C752,60 800,36 842,52C886,68 880,112 864,150L818,262" stroke="#8a1a1a" stroke-width="30"/>
+  <use href="#cane" stroke="#e23a3a" stroke-width="23"/>
+  <use href="#cane" stroke="#fff" stroke-width="23" stroke-linecap="butt" stroke-dasharray="11 19"/>
+  <use href="#cane" stroke="#fff" stroke-width="3" stroke-opacity=".5" transform="translate(-5,-5)"/>
+ </g>
+ <!-- acebo -->
+ <g stroke="#1f4d1f" stroke-width="2.5" stroke-linejoin="round" filter="url(#sh)">
+  <ellipse cx="872" cy="206" rx="34" ry="15" transform="rotate(-42 872 206)" fill="#3f8a3a"/>
+  <ellipse cx="846" cy="252" rx="32" ry="14" transform="rotate(28 846 252)" fill="#3a7d34"/>
+  <ellipse cx="884" cy="252" rx="30" ry="14" transform="rotate(-18 884 252)" fill="#47953f"/>
+  <circle cx="836" cy="226" r="12" fill="url(#berry)" stroke="#7a1010"/><circle cx="856" cy="214" r="12" fill="url(#berry)" stroke="#7a1010"/><circle cx="852" cy="240" r="12" fill="url(#berry)" stroke="#7a1010"/>
+ </g>
+
+ <!-- hombrecito de jengibre -->
+ <g class="man" filter="url(#sh)">
+  <g transform="translate(20,24)">
+   <use href="#gs" fill="#6b3010" stroke="#6b3010" stroke-width="8" stroke-linejoin="round"/>
+   <use href="#gs" fill="url(#mg)"/>
+   <g fill="none" stroke="#fff4e6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10,176q6,-8 12,0t12,0"/><path d="M168,152q6,-8 12,0t12,0"/>
+    <path d="M44,256q7,-9 14,0t14,0t14,0"/><path d="M114,256q7,-9 14,0t14,0t14,0"/>
+   </g>
+   <!-- gorro -->
+   <path d="M150,80C152,30 116,4 70,16C42,24 30,48 34,70L48,82Z" fill="#d52b2b" stroke="#7d1212" stroke-width="3" stroke-linejoin="round"/>
+   <path d="M62,28C80,18 108,16 124,28" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="6" stroke-linecap="round"/>
+   <rect x="40" y="66" width="116" height="30" rx="15" fill="#fff6ee" stroke="#d9bfae" stroke-width="2" transform="rotate(-6 98 81)"/>
+   <circle cx="30" cy="70" r="17" fill="#fff6ee" stroke="#d9bfae" stroke-width="2"/>
+   <!-- cara -->
+   <circle cx="80" cy="110" r="5" fill="#3b1a0c"/><circle cx="116" cy="110" r="5" fill="#3b1a0c"/>
+   <ellipse cx="68" cy="126" rx="8" ry="5.5" fill="#ff8f85" opacity=".75"/><ellipse cx="130" cy="126" rx="8" ry="5.5" fill="#ff8f85" opacity=".75"/>
+   <path d="M86,122Q98,140 110,122Z" fill="#d33a32" stroke="#3b1a0c" stroke-width="2.5" stroke-linejoin="round"/>
+   <!-- moño y botones -->
+   <path d="M98,156L66,140L66,172Z M98,156L130,140L130,172Z" fill="#d62d2d" stroke="#7d1212" stroke-width="3" stroke-linejoin="round"/>
+   <circle cx="98" cy="156" r="8" fill="#e8403a" stroke="#7d1212" stroke-width="3"/>
+   <circle cx="98" cy="194" r="9" fill="#bfe3cf" stroke="#6f9a82" stroke-width="2"/><circle cx="98" cy="222" r="9" fill="#bfe3cf" stroke="#6f9a82" stroke-width="2"/>
+  </g>
+  <use href="#star" transform="translate(238,104) rotate(8)"/>
+ </g>
+</svg>
+
+<div class="abs" id="art"><svg viewBox="0 0 24 24"><path fill="#fff1dc" d="M9 3v11.6A3.5 3.5 0 1 0 11 18V8.2l8-1.7v6.1A3.5 3.5 0 1 0 21 16V3.5z" transform="translate(-1 0)"/></svg><img id="cover" alt=""></div>
+
+<div class="abs" id="info">
+ <div class="clip"><span id="title">Nada sonando</span></div>
+ <div class="clip"><span id="artist">Pon música en Spotify</span></div>
+</div>
+
+<div class="abs" id="bar"><div id="fill"></div>
+ <svg id="knob" viewBox="-36 -36 72 72"><use href="#star"/></svg></div>
+
+<div class="abs" id="ctrl">
+ <svg class="ic" viewBox="0 0 24 24"><path d="M3 7h4c5 0 5 10 10 10h3M3 17h4c1.5 0 2.6-.8 3.5-2M13.5 9c.9-1.2 2-2 3.5-2h3M17 4l3 3-3 3M17 14l3 3-3 3"/></svg>
+ <svg class="ic" style="width:38px;height:38px" viewBox="0 0 24 24"><rect class="f" x="5" y="5" width="3" height="14" rx="1"/><path class="f" d="M19 5v14L9.5 12z"/></svg>
+ <svg id="pp" viewBox="0 0 64 64">
+  <g fill="#fff0da" stroke="#b98b5d" stroke-width="1.5" id="scal"></g>
+  <circle cx="32" cy="32" r="26" fill="#fff0da" stroke="#b98b5d" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="20" fill="none" stroke="#e6c9a2" stroke-width="2" stroke-dasharray="3 3"/>
+  <path class="play" d="M27 21.5l17 10.5-17 10.5z" fill="#d52b2b" stroke="#d52b2b" stroke-width="4" stroke-linejoin="round"/>
+  <g class="pause" fill="#d52b2b"><rect x="24" y="21" width="6.5" height="22" rx="2.5"/><rect x="34" y="21" width="6.5" height="22" rx="2.5"/></g>
+ </svg>
+ <svg class="ic" style="width:38px;height:38px" viewBox="0 0 24 24"><rect class="f" x="16" y="5" width="3" height="14" rx="1"/><path class="f" d="M5 5v14l9.5-7z"/></svg>
+ <svg class="ic" viewBox="0 0 24 24"><path d="M4 11V9a3 3 0 013-3h11M15 3l3 3-3 3M20 13v2a3 3 0 01-3 3H6M9 21l-3-3 3-3"/></svg>
+</div>
+</div>
+
+<!-- Panel de configuración (solo aparece la primera vez) -->
+<div id="setup"><div class="box">
+ <h1>Conectar con Spotify</h1>
+ <p>Esto se hace una sola vez, abriendo esta página en tu navegador normal (Chrome, Edge…), no dentro de OBS.</p>
+ <div class="warn" id="fileWarn" style="display:none">Estás abriendo el archivo desde tu computadora. Esta página tiene que abrirse desde su enlace de internet (el que empieza con https://).</div>
+ <ol>
+  <li>Entra a <b>developer.spotify.com/dashboard</b>, inicia sesión y pulsa <b>Create app</b>. Ponle cualquier nombre y descripción.</li>
+  <li>En <b>Redirect URI</b> pega esta dirección y pulsa <b>Add</b>:<br><code id="ruri"></code> <button id="cp1">Copiar</button></li>
+  <li>Marca <b>Web API</b>, acepta los términos y pulsa <b>Save</b>.</li>
+  <li>Entra a <b>Settings</b> de tu app, copia el <b>Client ID</b> y pégalo aquí:</li>
+ </ol>
+ <input id="cid" placeholder="Client ID" autocomplete="off">
+ <button id="go">Conectar con Spotify</button>
+ <div id="result" style="display:none;margin-top:22px">
+  <p><b>¡Listo!</b> Copia este enlace completo y pégalo en el campo <b>URL</b> de tu fuente Navegador en OBS. Es personal: no lo muestres en pantalla ni lo compartas.</p>
+  <textarea id="out" rows="5" readonly></textarea>
+  <button id="cp2">Copiar enlace</button>
+ </div>
+ <p id="err" style="color:#ffb4a8"></p>
+</div></div>
+
+<script>
+/* ============ CONFIGURACIÓN ============ */
+const CONFIG = {
+  CLIENT_ID: "",          // Client ID de tu app de Spotify
+  REFRESH_TOKEN: "",      // opcional: normalmente se usa el enlace personal que genera el panel
+  POLL_MS: 3000,          // cada cuántos ms consulta a Spotify
+  HIDE_WHEN_IDLE: false   // true = el widget se oculta si no hay música
+};
+/* ======================================= */
+
+const $ = s => document.querySelector(s);
+const ls = {get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+/* ---- dibujo procedural: galleta y glaseado ---- */
+const wave=(y,a,x0,x1,ph)=>{const s=x1>x0?3:-3,p=[];for(let x=x0;s>0?x<=x1:x>=x1;x+=s)p.push(x+","+(y+a*Math.sin(x/11+ph)).toFixed(1));return p};
+const T=wave(46,6,64,836,0),B=wave(254,6,836,64,1);
+const bodyD="M"+T.join("L")+"Q868,150 "+B[0]+"L"+B.slice(1).join("L")+"Q32,150 "+T[0]+"Z";
+document.querySelectorAll("[data-body]").forEach(e=>e.setAttribute("d",bodyD));
+const line=a=>"M"+a.join("L");
+$("#iceT").setAttribute("d",line(wave(58,7,110,810,.7)));$("#iceT2").setAttribute("d",line(wave(58,7,110,810,.7)));
+$("#iceB").setAttribute("d",line(wave(242,7,150,810,1.7)));$("#iceB2").setAttribute("d",line(wave(242,7,150,810,1.7)));
+let sc="";for(let i=0;i<14;i++){const a=i/14*Math.PI*2;sc+=`<circle cx="${(32+Math.cos(a)*25).toFixed(1)}" cy="${(32+Math.sin(a)*25).toFixed(1)}" r="6.5"/>`}
+$("#scal").innerHTML=sc;
+
+/* ---- escala automática al tamaño de la fuente de OBS ---- */
+function fit(){const s=Math.min(innerWidth/900,innerHeight/300),st=$("#stage");
+  st.style.transform=`scale(${s})`;st.style.left=(innerWidth-900*s)/2+"px";st.style.top=(innerHeight-300*s)/2+"px"}
+addEventListener("resize",fit);fit();
+
+/* ---- autenticación (PKCE, sin secreto de cliente) ---- */
+const q=new URLSearchParams(location.search);
+const REDIRECT=location.origin+location.pathname;
+const RT0=q.get("t")||CONFIG.REFRESH_TOKEN;
+const cid=()=>q.get("c")||CONFIG.CLIENT_ID||ls.get("gb_cid")||"";
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function tokenReq(p){
+  const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(p)});
+  if(!r.ok)throw new Error("Spotify respondió "+r.status+" al pedir el token");return r.json()}
+let AT=null,AT_EXP=0;
+function rt(){try{const s=JSON.parse(ls.get("gb_rt")||"null");if(s&&s.base===RT0)return s.rt}catch(e){}return RT0}
+async function access(){
+  if(AT&&Date.now()<AT_EXP)return AT;
+  const j=await tokenReq({grant_type:"refresh_token",refresh_token:rt(),client_id:cid()});
+  AT=j.access_token;AT_EXP=Date.now()+(j.expires_in-60)*1000;
+  if(j.refresh_token)ls.set("gb_rt",JSON.stringify({base:RT0,rt:j.refresh_token}));
+  return AT}
+
+/* ---- panel de configuración ---- */
+const copy=(t,btn)=>{(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const e=$("#out");e.select();document.execCommand("copy")}).then(()=>{const o=btn.textContent;btn.textContent="¡Copiado!";setTimeout(()=>btn.textContent=o,1500)})};
+async function setup(){
+  document.body.classList.add("setup");
+  $("#ruri").textContent=REDIRECT;$("#cid").value=cid();
+  $("#cp1").onclick=e=>copy(REDIRECT,e.target);
+  $("#cp2").onclick=e=>copy($("#out").value,e.target);
+  if(location.protocol==="file:")$("#fileWarn").style.display="block";
+  $("#go").onclick=async()=>{
+    const id=$("#cid").value.trim();if(!id)return;
+    try{ls.set("gb_cid",id);const v=b64(crypto.getRandomValues(new Uint8Array(48)));ls.set("gb_v",v);
+      const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+      location.href="https://accounts.spotify.com/authorize?"+new URLSearchParams({client_id:id,response_type:"code",redirect_uri:REDIRECT,
+        scope:"user-read-currently-playing user-read-playback-state",code_challenge_method:"S256",code_challenge:c});
+    }catch(e){$("#err").textContent="No se pudo iniciar la conexión: "+e.message}};
+  const code=q.get("code");
+  if(code){
+    try{const j=await tokenReq({grant_type:"authorization_code",code,redirect_uri:REDIRECT,client_id:cid(),code_verifier:ls.get("gb_v")});
+      $("#out").value=REDIRECT+"?c="+encodeURIComponent(cid())+"&t="+encodeURIComponent(j.refresh_token);$("#result").style.display="block";
+      history.replaceState(null,"",location.pathname);
+    }catch(e){$("#err").textContent=e.message+". Revisa que la dirección de Redirect URI sea exactamente la que se muestra arriba y vuelve a intentarlo."}}}
+
+/* ---- estado del reproductor ---- */
+let S=null,curId=null;
+function setText(el,t){el.textContent=t;el.classList.remove("mq");el.style.transform="";
+  requestAnimationFrame(()=>{const o=el.scrollWidth-el.parentElement.clientWidth;
+    if(o>2){el.style.setProperty("--d",-(o+14)+"px");el.style.animationDuration=Math.max(5,o/22)+"s";el.classList.add("mq")}})}
+function setTrack(s){
+  S=s;const id=s?s.id:"idle";
+  document.body.classList.toggle("playing",!!(s&&s.playing));
+  document.body.classList.toggle("idle",!s);
+  if(id===curId)return;curId=id;
+  setText($("#title"),s?s.title:"Nada sonando");
+  setText($("#artist"),s?s.artist:"Pon música en Spotify");
+  const im=$("#cover");if(s&&s.img){im.src=s.img;im.style.display="block"}else im.style.display="none"}
+$("#cover").onerror=e=>e.target.style.display="none";
+
+(function loop(){
+  let pct=0;
+  if(S&&S.dur){const p=Math.min(S.prog+(S.playing?performance.now()-S.t:0),S.dur);pct=p/S.dur}
+  document.documentElement.style.setProperty("--p",pct.toFixed(4));
+  requestAnimationFrame(loop)})();
+
+/* ---- consulta a Spotify ---- */
+async function tick(){
+  let wait=CONFIG.POLL_MS;
+  try{
+    const r=await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",{headers:{Authorization:"Bearer "+await access()}});
+    if(r.status===204)setTrack(null);
+    else if(r.status===401)AT=null;
+    else if(r.status===429)wait=(+r.headers.get("Retry-After")||5)*1000;
+    else if(r.ok){
+      const j=await r.json(),it=j.item;
+      if(!it)setTrack(null);
+      else{const src=it.album||it.show||{},imgs=src.images||[];
+        setTrack({id:it.id,title:it.name,
+          artist:(it.artists&&it.artists.map(a=>a.name).join(", "))||(it.show&&it.show.publisher)||"",
+          img:(imgs[1]||imgs[0]||{}).url,dur:it.duration_ms,prog:j.progress_ms||0,playing:!!j.is_playing,t:performance.now()})}}
+  }catch(e){console.warn("[gingerbread]",e);wait=6000}
+  setTimeout(tick,wait)}
+
+/* ---- arranque ---- */
+if(CONFIG.HIDE_WHEN_IDLE)document.body.classList.add("hide-idle");
+document.body.classList.add("idle");
+if(q.get("code")||q.has("setup")||!(cid()&&RT0))setup();else tick();
+</script>
+</body>
+</html>
