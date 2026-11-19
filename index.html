@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reproductor de jengibre · Spotify</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;1,500&display=swap" rel="stylesheet">
+<style>
+:root{--p:0}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:'Lora',Georgia,'Times New Roman',serif}
+.stage{position:absolute;left:0;top:0;width:2172px;height:724px;transform-origin:0 0;transition:opacity .6s}
+body.hide-idle.idle .stage{opacity:0}
+body.setup .stage{display:none}
+.abs{position:absolute}
+#plate{position:absolute;left:0;top:0;width:2172px;height:724px;display:block;user-select:none;-webkit-user-drag:none}
+
+/* portada: queda DEBAJO del marco de glaseado, que la recorta a la perfección */
+#art{left:693px;top:221px;width:297px;height:287px;border-radius:40px;overflow:hidden;background:url(nota.webp) center/100% 100% no-repeat}
+#cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+
+/* texto */
+.clip{padding:16px 14px;margin:-16px -14px;overflow:hidden;white-space:nowrap}
+.clip.fade{-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);mask-image:linear-gradient(90deg,#000 92%,transparent)}
+.clip span{display:inline-block}
+#tbox{left:1055px;top:172px} #tbox .clip{width:635px}
+#abox{left:1055px;top:285px} #abox .clip{width:735px}
+#title{font-weight:600;font-size:102px;line-height:120px;letter-spacing:.5px;color:transparent;
+ background:linear-gradient(180deg,#fffaf0 0%,#fbe9cc 52%,#efcd9b 100%);-webkit-background-clip:text;background-clip:text;
+ filter:drop-shadow(0 0 1.2px #7a3d16) drop-shadow(0 3px 0 #93501f) drop-shadow(0 7px 7px rgba(70,28,6,.55))}
+#artist{font-style:italic;font-weight:500;font-size:56px;line-height:70px;color:transparent;
+ background:linear-gradient(180deg,#fff6e6 0%,#f6dcb2 100%);-webkit-background-clip:text;background-clip:text;
+ filter:drop-shadow(0 0 1px #7a3d16) drop-shadow(0 2px 0 #93501f) drop-shadow(0 5px 5px rgba(70,28,6,.5))}
+.mq{animation:mq 8s ease-in-out 1s infinite alternate}
+@keyframes mq{to{transform:translateX(var(--d))}}
+
+/* estrella del progreso sobre la barra de glaseado */
+#knob{left:calc(1075px + 740px*var(--p) - 62px);top:332px;width:124px;height:124px;overflow:visible}
+#knob .st{transform-box:fill-box;transform-origin:center}
+body.playing #knob .st{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(1.07) rotate(3deg)}}
+
+/* símbolo central de play / pausa en glaseado blanco */
+#pp{left:1400px;top:445px;width:100px;height:100px;overflow:visible}
+.pp-play,.pp-pause{transition:opacity .25s}
+.pp-pause{opacity:0}
+body.playing .pp-pause{opacity:1}
+body.playing .pp-play{opacity:0}
+@media (prefers-reduced-motion:reduce){.mq,body.playing #knob .st{animation:none}}
+
+/* configuración inicial */
+#setup{display:none;position:fixed;inset:0;overflow:auto;background:#2b1408;color:#ffe9cf;font:16px/1.55 system-ui,sans-serif;padding:28px}
+body.setup #setup{display:block}
+#setup .box{max-width:640px;margin:auto}
+#setup h1{font:600 28px 'Fraunces',Georgia,serif;margin:0 0 8px}
+#setup ol{padding-left:20px}
+#setup code,#setup textarea,#setup input{font:14px ui-monospace,Consolas,monospace}
+#setup code{background:#4b2312;padding:2px 6px;border-radius:4px;word-break:break-all}
+#setup input,#setup textarea{width:100%;padding:10px;border-radius:8px;border:2px solid #b98b5d;background:#fff6e8;color:#3b1a0c}
+#setup button{margin-top:10px;padding:10px 18px;border:0;border-radius:999px;background:#d52b2b;color:#fff;font:600 16px system-ui;cursor:pointer}
+#setup .warn{background:#6b2a12;border-radius:8px;padding:10px 14px;margin:12px 0}
+
+
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage">
+ <div class="abs" id="art"><img id="cover" alt=""></div>
+ <img id="plate" alt="" src="fondo.webp">
+ <div class="abs" id="tbox"><div class="clip"><span id="title">Canción</span></div></div>
+ <div class="abs" id="abox"><div class="clip"><span id="artist">Artista</span></div></div>
+
+ <svg class="abs" id="knob" viewBox="-62 -62 124 124">
+  <defs>
+   <linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe48e"/><stop offset="1" stop-color="#f3a936"/></linearGradient>
+   <linearGradient id="sg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff4b8"/><stop offset=".6" stop-color="#fbd062"/><stop offset="1" stop-color="#f0ac3a"/></linearGradient>
+   <filter id="ksh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dy="5" stdDeviation="4" flood-color="#3c1604" flood-opacity=".55"/></filter>
+  </defs>
+  <g class="st" filter="url(#ksh)" transform="translate(0,-1)">
+   <polygon points="0,-32 8.2,-11.3 30.4,-9.9 13.3,4.3 18.8,25.9 0,14 -18.8,25.9 -13.3,4.3 -30.4,-9.9 -8.2,-11.3" transform="scale(1.3)" fill="#a95b19" stroke="#a95b19" stroke-width="11" stroke-linejoin="round"/>
+   <polygon points="0,-32 8.2,-11.3 30.4,-9.9 13.3,4.3 18.8,25.9 0,14 -18.8,25.9 -13.3,4.3 -30.4,-9.9 -8.2,-11.3" transform="scale(1.3)" fill="url(#sg1)" stroke="url(#sg1)" stroke-width="6" stroke-linejoin="round"/>
+   <polygon points="0,-32 8.2,-11.3 30.4,-9.9 13.3,4.3 18.8,25.9 0,14 -18.8,25.9 -13.3,4.3 -30.4,-9.9 -8.2,-11.3" transform="translate(0,-1) scale(.98)" fill="url(#sg2)" stroke="url(#sg2)" stroke-width="7" stroke-linejoin="round"/>
+   <path d="M-24,-20 Q-12,-33 -2,-33" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="5" stroke-linecap="round"/>
+   <ellipse cx="-22" cy="-6" rx="3.2" ry="2.2" fill="#fff" fill-opacity=".8" transform="rotate(-30 -22 -6)"/>
+  </g>
+ </svg>
+
+ <svg class="abs" id="pp" viewBox="-50 -50 100 100">
+  <defs>
+   <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf8"/><stop offset=".55" stop-color="#f8e8d2"/><stop offset="1" stop-color="#efd3b3"/></linearGradient>
+   <filter id="psh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dy="4" stdDeviation="3" flood-color="#4a1d06" flood-opacity=".55"/></filter>
+  </defs>
+  <g class="pp-play" filter="url(#psh)">
+   <polygon points="-22,-30 -22,30 32,0" fill="#d2a47c" stroke="#d2a47c" stroke-width="15" stroke-linejoin="round"/>
+   <polygon points="-22,-30 -22,30 32,0" fill="url(#cg)" stroke="url(#cg)" stroke-width="10" stroke-linejoin="round"/>
+   <path d="M-23,-22 L-23,14" stroke="#fff" stroke-opacity=".9" stroke-width="4.5" stroke-linecap="round"/>
+  </g>
+  <g class="pp-pause" filter="url(#psh)">
+   <rect x="-27" y="-32" width="21" height="64" rx="10" fill="#d2a47c" stroke="#d2a47c" stroke-width="5"/>
+   <rect x="6" y="-32" width="21" height="64" rx="10" fill="#d2a47c" stroke="#d2a47c" stroke-width="5"/>
+   <rect x="-26" y="-31" width="19" height="62" rx="9" fill="url(#cg)"/>
+   <rect x="7" y="-31" width="19" height="62" rx="9" fill="url(#cg)"/>
+   <path d="M-20,-22 L-20,12 M13,-22 L13,12" stroke="#fff" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>
+  </g>
+ </svg>
+</div>
+
+<!-- Panel de configuración (solo aparece la primera vez) -->
+<div id="setup"><div class="box">
+ <h1>Conectar con Spotify</h1>
+ <p>Esto se hace una sola vez, abriendo esta página en tu navegador normal (Chrome, Edge…), no dentro de OBS.</p>
+ <div class="warn" id="fileWarn" style="display:none">Estás abriendo el archivo desde tu computadora. Esta página tiene que abrirse desde su enlace de internet (el que empieza con https://).</div>
+ <ol>
+  <li>Entra a <b>developer.spotify.com/dashboard</b>, inicia sesión y pulsa <b>Create app</b>. Ponle cualquier nombre y descripción.</li>
+  <li>En <b>Redirect URI</b> pega esta dirección y pulsa <b>Add</b>:<br><code id="ruri"></code> <button id="cp1">Copiar</button></li>
+  <li>Marca <b>Web API</b>, acepta los términos y pulsa <b>Save</b>.</li>
+  <li>Entra a <b>Settings</b> de tu app, copia el <b>Client ID</b> y pégalo aquí:</li>
+ </ol>
+ <input id="cid" placeholder="Client ID" autocomplete="off">
+ <button id="go">Conectar con Spotify</button>
+ <div id="result" style="display:none;margin-top:22px">
+  <p><b>¡Listo!</b> Copia este enlace completo y pégalo en el campo <b>URL</b> de tu fuente Navegador en OBS. Es personal: no lo muestres en pantalla ni lo compartas.</p>
+  <textarea id="out" rows="5" readonly></textarea>
+  <button id="cp2">Copiar enlace</button>
+ </div>
+ <p id="err" style="color:#ffb4a8"></p>
+</div></div>
+
+<script>
+
+
+/* ============ CONFIGURACIÓN ============ */
+const CONFIG = {
+  CLIENT_ID: "",          // Client ID de tu app de Spotify
+  REFRESH_TOKEN: "",      // opcional: normalmente se usa el enlace personal que genera el panel
+  POLL_MS: 3000,          // cada cuántos ms consulta a Spotify
+  HIDE_WHEN_IDLE: false   // true = el widget se oculta si no hay música
+};
+/* ======================================= */
+
+const $ = s => document.querySelector(s);
+const ls = {get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+/* ---- escala automática al tamaño de la fuente de OBS ---- */
+function fit(){const s=Math.min(innerWidth/2172,innerHeight/724),st=$("#stage");
+  st.style.transform=`scale(${s})`;st.style.left=(innerWidth-2172*s)/2+"px";st.style.top=(innerHeight-724*s)/2+"px"}
+addEventListener("resize",fit);fit();
+
+/* ---- autenticación (PKCE, sin secreto de cliente) ---- */
+const q=new URLSearchParams(location.search);
+const REDIRECT=location.origin+location.pathname;
+const RT0=q.get("t")||CONFIG.REFRESH_TOKEN;
+const cid=()=>q.get("c")||CONFIG.CLIENT_ID||ls.get("gb_cid")||"";
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function tokenReq(p){
+  const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(p)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error((j.error||("HTTP "+r.status))+(j.error_description?": "+j.error_description:""));e.kind="token";e.code=j.error||"";throw e}
+  return j}
+let AT=null,AT_EXP=0;
+function rt(){try{const s=JSON.parse(ls.get("gb_rt")||"null");if(s&&s.base===RT0)return s.rt}catch(e){}return RT0}
+async function access(){
+  if(AT&&Date.now()<AT_EXP)return AT;
+  let j;
+  try{j=await tokenReq({grant_type:"refresh_token",refresh_token:rt(),client_id:cid()})}
+  catch(e){
+    /* si el token renovado guardado ya no sirve, vuelve a intentar con el del enlace */
+    if(e.code==="invalid_grant"&&rt()!==RT0){ls.set("gb_rt","");j=await tokenReq({grant_type:"refresh_token",refresh_token:RT0,client_id:cid()})}
+    else throw e}
+  AT=j.access_token;AT_EXP=Date.now()+(j.expires_in-60)*1000;
+  if(j.refresh_token)ls.set("gb_rt",JSON.stringify({base:RT0,rt:j.refresh_token}));
+  return AT}
+
+/* ---- panel de configuración ---- */
+const copy=(t,btn)=>{(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).catch(()=>{const e=$("#out");e.select();document.execCommand("copy")}).then(()=>{const o=btn.textContent;btn.textContent="¡Copiado!";setTimeout(()=>btn.textContent=o,1500)})};
+async function setup(){
+  document.body.classList.add("setup");
+  $("#ruri").textContent=REDIRECT;$("#cid").value=cid();
+  $("#cp1").onclick=e=>copy(REDIRECT,e.target);
+  $("#cp2").onclick=e=>copy($("#out").value,e.target);
+  if(location.protocol==="file:")$("#fileWarn").style.display="block";
+  $("#go").onclick=async()=>{
+    const id=$("#cid").value.trim();if(!id)return;
+    try{ls.set("gb_cid",id);const v=b64(crypto.getRandomValues(new Uint8Array(48)));ls.set("gb_v",v);
+      const c=b64(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)));
+      location.href="https://accounts.spotify.com/authorize?"+new URLSearchParams({client_id:id,response_type:"code",redirect_uri:REDIRECT,
+        scope:"user-read-currently-playing user-read-playback-state",code_challenge_method:"S256",code_challenge:c});
+    }catch(e){$("#err").textContent="No se pudo iniciar la conexión: "+e.message}};
+  const code=q.get("code");
+  if(code){
+    try{const j=await tokenReq({grant_type:"authorization_code",code,redirect_uri:REDIRECT,client_id:cid(),code_verifier:ls.get("gb_v")});
+      $("#out").value=REDIRECT+"?c="+encodeURIComponent(cid())+"&t="+encodeURIComponent(j.refresh_token);$("#result").style.display="block";
+      history.replaceState(null,"",location.pathname);
+    }catch(e){$("#err").textContent=e.message+". Revisa que la dirección de Redirect URI sea exactamente la que se muestra arriba y vuelve a intentarlo."}}}
+
+/* ---- estado del reproductor ---- */
+let S=null,curId=null;
+function setText(el,t){el.textContent=t;el.classList.remove("mq");el.style.transform="";
+  requestAnimationFrame(()=>{const o=el.scrollWidth-(el.parentElement.clientWidth-28);
+    el.parentElement.classList.toggle("fade",o>2);
+    if(o>2){el.style.setProperty("--d",-(o+14)+"px");el.style.animationDuration=Math.max(4,o/55)+"s";el.classList.add("mq")}})}
+function setTrack(s){
+  S=s;const id=s?s.id:"idle";
+  document.body.classList.toggle("playing",!!(s&&s.playing));
+  document.body.classList.toggle("idle",!s);
+  if(id===curId)return;curId=id;
+  setText($("#title"),s?s.title:"Canción");
+  setText($("#artist"),s?s.artist:"Artista");
+  const im=$("#cover");if(s&&s.img){im.src=s.img;im.style.display="block"}else im.style.display="none"}
+$("#cover").onerror=()=>{$("#cover").style.display="none"};
+
+(function loop(){
+  let pct=0;
+  if(S&&S.dur){const p=Math.min(S.prog+(S.playing?performance.now()-S.t:0),S.dur);pct=p/S.dur}
+  document.documentElement.style.setProperty("--p",pct.toFixed(4));
+  requestAnimationFrame(loop)})();
+
+/* ---- errores visibles en el widget ---- */
+function setError(t,d){
+  S=null;curId="err:"+t+d;
+  document.body.classList.remove("playing");document.body.classList.add("idle");
+  setText($("#title"),t);setText($("#artist"),d);$("#cover").style.display="none"}
+
+/* ---- consulta a Spotify ---- */
+async function tick(){
+  let wait=CONFIG.POLL_MS;
+  try{
+    const r=await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode",{headers:{Authorization:"Bearer "+await access()}});
+    if(r.status===204)setTrack(null);
+    else if(r.status===401)AT=null;
+    else if(r.status===429)wait=(+r.headers.get("Retry-After")||5)*1000;
+    else if(r.status===403){let m="";try{m=(await r.json()).error.message}catch(e){}
+      console.warn("[gingerbread] 403",m);setError("Spotify: sin acceso",m||"Error 403");wait=10000}
+    else if(!r.ok){console.warn("[gingerbread]",r.status);setError("Spotify: error "+r.status,"Reintentando…");wait=8000}
+    else if(r.ok){
+      const j=await r.json(),it=j.item;
+      if(!it)setTrack(null);
+      else{const src=it.album||it.show||{},imgs=src.images||[];
+        setTrack({id:it.id,title:it.name,
+          artist:(it.artists&&it.artists.map(a=>a.name).join(", "))||(it.show&&it.show.publisher)||"",
+          img:(imgs[1]||imgs[0]||{}).url,dur:it.duration_ms,prog:j.progress_ms||0,playing:!!j.is_playing,t:performance.now()})}}
+  }catch(e){console.warn("[gingerbread]",e);wait=6000;
+    if(e.kind==="token")setError("Reconecta Spotify",e.code==="invalid_grant"?"El enlace caducó: genera uno nuevo":e.message);
+    else setError("Sin conexión","Reintentando…")}
+  setTimeout(tick,wait)}
+
+/* ---- arranque ---- */
+if(CONFIG.HIDE_WHEN_IDLE)document.body.classList.add("hide-idle");
+document.body.classList.add("idle");
+if(q.get("code")||q.has("setup")||!(cid()&&RT0))setup();else tick();
+</script>
+</body>
+</html>
